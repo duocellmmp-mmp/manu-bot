@@ -3,51 +3,48 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const chrono = require('chrono-node');
 const cron = require('node-cron');
+const admin = require('firebase-admin');
 
-// 1. Configuración Servidor (Render)
+// 1. Conexión Firebase
+const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+const db = admin.firestore();
+
 const app = express();
-const port = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('Bot activo con Firebase'));
+app.listen(process.env.PORT || 3000);
 
-app.get('/', (req, res) => res.send('Bot de Manu en línea 🤖'));
-app.listen(port, () => console.log(`Servidor activo en puerto ${port}`));
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
 
-// 2. Configuración Bot
-const token = process.env.TELEGRAM_TOKEN;
-const bot = new TelegramBot(token, { polling: true });
-
-// Almacenamiento temporal (en memoria)
-let tareas = [];
-
-// 3. Lógica del Bot
-bot.on('message', (msg) => {
+// 2. Lógica del Bot
+bot.on('message', async (msg) => {
     const text = msg.text;
     if (!text || text.startsWith('/')) return;
 
-    // Detectar fecha y hora en el mensaje
     const fechaDetectada = chrono.es.parseDate(text);
-
     if (fechaDetectada) {
-        const tarea = {
+        await db.collection('tareas').add({
             chatId: msg.chat.id,
             texto: text,
-            fecha: fechaDetectada,
+            fecha: admin.firestore.Timestamp.fromDate(fechaDetectada),
             notificado: false
-        };
-        tareas.push(tarea);
-        bot.sendMessage(msg.chat.id, `✅ Entendido. Agendado para: ${fechaDetectada.toLocaleString()}`);
+        });
+        bot.sendMessage(msg.chat.id, `✅ Agendado en la nube para: ${fechaDetectada.toLocaleString()}`);
     } else {
-        bot.sendMessage(msg.chat.id, "No entendí cuándo quieres el recordatorio. Prueba con: 'Prueba el miércoles a las 10:30'");
+        bot.sendMessage(msg.chat.id, "No entendí la fecha. Prueba: 'Prueba el miércoles a las 10:30'");
     }
 });
 
-// 4. Verificador de tareas (revisa cada minuto)
-cron.schedule('* * * * *', () => {
+// 3. Verificador de tareas (revisa Firebase cada minuto)
+cron.schedule('* * * * *', async () => {
     const ahora = new Date();
+    const snapshot = await db.collection('tareas').where('notificado', '==', false).get();
     
-    tareas.forEach(t => {
-        if (!t.notificado && t.fecha <= ahora) {
-            bot.sendMessage(t.chatId, `🔔 RECORDATORIO: ${t.texto}`);
-            t.notificado = true;
+    snapshot.forEach(async (doc) => {
+        const data = doc.data();
+        if (data.fecha.toDate() <= ahora) {
+            bot.sendMessage(data.chatId, `🔔 RECORDATORIO: ${data.texto}`);
+            await db.collection('tareas').doc(doc.id).update({ notificado: true });
         }
     });
 });
