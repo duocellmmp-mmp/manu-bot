@@ -1,41 +1,36 @@
-// Usamos require de forma estándar
+require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
+const chrono = require('chrono-node'); // <-- Nueva librería
 
-// 1. Configuración del Servidor Web
 const app = express();
-const port = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('Bot activo'));
+app.listen(process.env.PORT || 3000);
 
-app.get('/', (req, res) => {
-  res.send('El bot de Manu está en línea 🤖');
-});
-
-app.listen(port, () => {
-  console.log(`Servidor web escuchando en el puerto ${port}`);
-});
-
-// 2. Configuración del Bot
-// Usamos tu Token directamente aquí para esta prueba, 
-// recuerda luego moverlo a un archivo .env por seguridad.
-const token = '8007968947:AAHD6il9Lyo0DmH4UDq_mCE0uUUcCuZH__M';
-
-// IMPORTANTE: Si polling da error al desplegar, se debe usar webhooks.
-// Para pruebas locales, polling: true funciona.
+const token = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-// Comando: /start
-bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, '¡Hola Manu! Soy tu asistente. Pídeme que te recuerde algo usando este formato: "Pon un recordatorio dentro de X minutos"');
-});
+bot.on('message', (msg) => {
+  const text = msg.text;
+  if (!text || text.startsWith('/')) return;
 
-// Comando: Recordatorios
-bot.onText(/Pon un recordatorio dentro de (\d+) minutos/i, (msg, match) => {
-  const chatId = msg.chat.id;
-  const minutos = parseInt(match[1]);
+  // Intentamos parsear la fecha del mensaje
+  const parsedDate = chrono.es.parseDate(text); // 'es' para español
 
-  bot.sendMessage(chatId, `¡Anotado! Te enviaré un recordatorio en ${minutos} minutos. ⏱️`);
+  if (parsedDate) {
+    const ahora = new Date();
+    const tiempoEspera = parsedDate.getTime() - ahora.getTime();
 
-  setTimeout(() => {
-    bot.sendMessage(chatId, '🔔 ¡Bip bip! Aquí tienes tu recordatorio.');
-  }, minutos * 60 * 1000);
+    if (tiempoEspera > 0) {
+      bot.sendMessage(msg.chat.id, `✅ Entendido. Te recordaré: "${text}" el ${parsedDate.toLocaleString()}`);
+      
+      setTimeout(() => {
+        bot.sendMessage(msg.chat.id, `🔔 RECORDATORIO: ${text}`);
+      }, tiempoEspera);
+    } else {
+      bot.sendMessage(msg.chat.id, "❌ La fecha parece estar en el pasado.");
+    }
+  } else {
+    bot.sendMessage(msg.chat.id, "No pude entender la fecha. Intenta: 'Recordar prueba el miércoles a las 10:30'");
+  }
 });
