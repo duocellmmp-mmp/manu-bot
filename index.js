@@ -15,55 +15,53 @@ app.listen(process.env.PORT || 3000);
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
 
 bot.on('message', async (msg) => {
-    const text = msg.text ? msg.text.toLowerCase() : "";
-    if (!text) return;
+    const text = msg.text || "";
+    const lowerText = text.toLowerCase();
 
-    // 1. Comando: Eliminar
-    if (text.includes('eliminar') || text.includes('quitar')) {
+    // 1. COMANDOS DE PRIORIDAD ALTA
+    if (lowerText.includes('eliminar') || lowerText.includes('quitar')) {
         const snapshot = await db.collection('tareas').where('chatId', '==', msg.chat.id).get();
-        if (snapshot.empty) return bot.sendMessage(msg.chat.id, "No tienes recordatorios pendientes.");
-        let batch = db.batch();
+        if (snapshot.empty) return bot.sendMessage(msg.chat.id, "No tienes recordatorios.");
+        
+        const batch = db.batch();
         snapshot.docs.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
-        return bot.sendMessage(msg.chat.id, "✅ Todos tus recordatorios han sido eliminados.");
+        return bot.sendMessage(msg.chat.id, "✅ Recordatorios eliminados.");
     }
 
-    // 2. Comando: Listar (Ordenados por fecha)
-    if (text.includes('mis recordatorios') || text.includes('dame todos los recordatorios')) {
+    if (lowerText.includes('dame todos') || lowerText.includes('mis recordatorios')) {
+        // Quitamos el orderBy por ahora para evitar el error de índice
         const snapshot = await db.collection('tareas')
             .where('chatId', '==', msg.chat.id)
             .where('notificado', '==', false)
-            .orderBy('fecha', 'asc') // <-- Ordenado por fecha
             .get();
         
-        if (snapshot.empty) return bot.sendMessage(msg.chat.id, "No tienes recordatorios programados.");
+        if (snapshot.empty) return bot.sendMessage(msg.chat.id, "No tienes tareas pendientes.");
         
-        let respuesta = "📋 *Tus recordatorios pendientes:*\n\n";
+        let respuesta = "📋 *Pendientes:*\n";
         snapshot.forEach(doc => {
             const data = doc.data();
-            respuesta += `• ${data.texto} (📅 ${data.fecha.toDate().toLocaleString('es-EC')})\n`;
+            respuesta += `• ${data.texto} (${data.fecha.toDate().toLocaleString('es-EC')})\n`;
         });
         return bot.sendMessage(msg.chat.id, respuesta, { parse_mode: 'Markdown' });
     }
 
-    // 3. Procesar Recordatorios (solo si no fue un comando anterior)
-    const ahora = new Date();
-    const parsedDate = chrono.es.parseDate(text, ahora, { forwardDate: true });
+    // 2. DETECCIÓN DE FECHA (Solo si no es un comando)
+    const parsedDate = chrono.es.parseDate(text, new Date(), { forwardDate: true });
 
     if (parsedDate) {
         await db.collection('tareas').add({
             chatId: msg.chat.id,
-            texto: msg.text, // Guardamos el texto original
+            texto: text,
             fecha: admin.firestore.Timestamp.fromDate(parsedDate),
             notificado: false
         });
-        bot.sendMessage(msg.chat.id, `✅ Agendado para: ${parsedDate.toLocaleString('es-EC')}`);
+        bot.sendMessage(msg.chat.id, `✅ Agendado: ${parsedDate.toLocaleString('es-EC')}`);
     } else {
-        bot.sendMessage(msg.chat.id, "No entendí. Prueba: 'Recordar mañana a las 10' o 'Dame mis recordatorios'");
+        bot.sendMessage(msg.chat.id, "No entendí. Prueba: 'Mañana a las 10:00' o 'Mis recordatorios'");
     }
 });
 
-// 4. Verificador de tareas
 cron.schedule('* * * * *', async () => {
     const ahora = new Date();
     const snapshot = await db.collection('tareas').where('notificado', '==', false).get();
