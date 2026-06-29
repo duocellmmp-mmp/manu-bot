@@ -5,54 +5,50 @@ const chrono = require('chrono-node');
 const cron = require('node-cron');
 const admin = require('firebase-admin');
 
-// 1. Configuración de Firebase
-// Asegúrate de que la variable FIREBASE_CONFIG en Render contenga el JSON de tu cuenta de servicio
 const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-});
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-// 2. Servidor Web para mantener el bot despierto en Render
 const app = express();
-const port = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('Bot de Manu activo y conectado a Firebase'));
-app.listen(port, () => console.log(`Servidor escuchando en puerto ${port}`));
+app.listen(process.env.PORT || 3000);
 
-// 3. Configuración del Bot
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
 
-// 4. Lógica de mensajes
 bot.on('message', async (msg) => {
     const text = msg.text;
-    if (!text || text.startsWith('/')) return;
+    if (!text) return;
 
-    // Usamos la referencia actual y forzamos el idioma español
+    // 1. Comando para borrar
+    if (text.toLowerCase().includes('quitar') || text.toLowerCase().includes('eliminar')) {
+        const snapshot = await db.collection('tareas').where('chatId', '==', msg.chat.id).get();
+        let batch = db.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        return bot.sendMessage(msg.chat.id, "✅ Todos tus recordatorios han sido eliminados.");
+    }
+
+    // 2. Procesar Recordatorios
     const ahora = new Date();
+    // Forzamos que la fecha sea desde hoy para evitar errores de desfase
     const parsedDate = chrono.es.parseDate(text, ahora, { forwardDate: true });
 
     if (parsedDate) {
-        // Guardamos en Firebase con zona horaria local
         await db.collection('tareas').add({
             chatId: msg.chat.id,
             texto: text,
             fecha: admin.firestore.Timestamp.fromDate(parsedDate),
             notificado: false
         });
-
-        const fechaFormateada = parsedDate.toLocaleString('es-EC', { timeZone: 'America/Guayaquil' });
-        bot.sendMessage(msg.chat.id, `✅ ¡Entendido! Agendado para el: ${fechaFormateada}`);
-    } else {
-        bot.sendMessage(msg.chat.id, "No logré entender la fecha. Intenta escribir algo como: 'Recordar revisar pruebas mañana a las 10:00'");
+        bot.sendMessage(msg.chat.id, `✅ Agendado para: ${parsedDate.toLocaleString('es-EC')}`);
+    } else if (!text.startsWith('/')) {
+        bot.sendMessage(msg.chat.id, "No entendí la fecha. Ejemplo: 'Recordar mañana a las 12:00'");
     }
 });
 
-// 5. Verificador de tareas (revisa Firebase cada minuto)
+// 3. Verificador de tareas
 cron.schedule('* * * * *', async () => {
     const ahora = new Date();
-    const snapshot = await db.collection('tareas')
-        .where('notificado', '==', false)
-        .get();
+    const snapshot = await db.collection('tareas').where('notificado', '==', false).get();
     
     snapshot.forEach(async (doc) => {
         const data = doc.data();
