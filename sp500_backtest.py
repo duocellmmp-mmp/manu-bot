@@ -135,12 +135,15 @@ class Strategy:
         """Calcular métricas de desempeño"""
         if not self.trades:
             return {
+                'Strategy': self.name,
                 'Total Trades': 0,
                 'Winning Trades': 0,
                 'Losing Trades': 0,
-                'Win Rate': 0,
+                'Win Rate (%)': 0,
                 'Profit Factor': 0,
-                'Total Profit': 0
+                'Total Profit ($)': 0,
+                'Avg Win ($)': 0,
+                'Avg Loss ($)': 0,
             }
 
         winning_trades = [t for t in self.trades if t['profit'] > 0]
@@ -428,8 +431,9 @@ def main():
         strategy.backtest()
         metrics = strategy.calculate_metrics()
         results.append(metrics)
+        win_rate_key = 'Win Rate (%)' if 'Win Rate (%)' in metrics else 'Win Rate'
         print(f"   ✓ {metrics['Total Trades']} operaciones | "
-              f"Win Rate: {metrics['Win Rate (%)']}% | "
+              f"Win Rate: {metrics[win_rate_key]}% | "
               f"Ganancia: ${metrics['Total Profit ($)']}\n")
 
     # Mostrar resumen
