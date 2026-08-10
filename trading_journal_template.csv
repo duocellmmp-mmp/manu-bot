@@ -1,0 +1,6 @@
+Date,Time,Strategy,Instrument,Direction,Entry_Price,Entry_Reason,Exit_Price,Exit_Reason,Quantity,Profit_Loss,Profit_Pct,Duration_Minutes,Win_Loss,Emotions,Notes
+2026-08-10,09:35,1 - EMA Cross,ES,LONG,5210.50,EMA 9 cruzó arriba EMA 21 + RSI 45,5225.80,TP alcanzado,1,1530.00,0.29,12,WIN,Confiado,Setup textbook
+2026-08-10,10:05,2 - MACD Bollinger,ES,LONG,5235.20,Precio tocó banda inferior + MACD histograma positivo,5218.40,SL hit,1,-1680.00,-0.32,18,LOSS,Frustrado,Mercado lateral falso
+2026-08-10,10:45,4 - MACD Histogram,ES,LONG,5240.00,Histograma MACD pasó a positivo + precio encima EMA50,5254.70,Histograma negativo,1,1470.00,0.28,8,WIN,Disciplinado,Buen momentum
+2026-08-10,14:20,1 - EMA Cross,ES,SHORT,5245.30,EMA 9 cruzó debajo EMA 21,5230.90,TP 25 puntos,1,1440.00,0.27,22,WIN,Paciente,Espere confirmación
+2026-08-10,15:05,5 - Bollinger Squeeze,ES,LONG,5250.00,Squeeze detectado + breakout con RSI > 50,5275.40,Toma de ganancias,1,2540.00,0.48,25,WIN,Excelente,Mejor setup del día
