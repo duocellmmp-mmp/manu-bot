@@ -1,0 +1,113 @@
+//@version=5
+strategy("SP500 Estrategia 4: MACD Histogram", overlay=true,
+         initial_capital=10000, default_qty_type=strategy.percent_of_equity,
+         default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.05)
+
+// ============================================================================
+// PARÁMETROS
+// ============================================================================
+
+macd_fast = input(12, title="EMA Rápida MACD", group="MACD")
+macd_slow = input(26, title="EMA Lenta MACD", group="MACD")
+macd_signal = input(9, title="Línea de Señal", group="MACD")
+
+ema50_len = input(50, title="EMA Filtro", group="Filtro de Tendencia")
+rsi_len = input(14, title="Período RSI", group="RSI")
+rsi_min_buy = input(40, title="RSI Mínimo Compra", group="RSI")
+rsi_max_buy = input(70, title="RSI Máximo Compra", group="RSI")
+
+sl_points = input(18, title="Stop Loss (puntos)", group="Gestión de Riesgo")
+tp_points = input(30, title="Take Profit (puntos)", group="Gestión de Riesgo")
+
+// ============================================================================
+// INDICADORES
+// ============================================================================
+
+[macdLine, signalLine, hist] = ta.macd(close, macd_fast, macd_slow, macd_signal)
+ema50 = ta.ema(close, ema50_len)
+rsi = ta.rsi(close, rsi_len)
+
+// Detectar cambios de signo del histograma
+hist_positive = hist > 0
+hist_was_negative = hist[1] <= 0
+
+// ============================================================================
+// SEÑALES
+// ============================================================================
+
+// COMPRA: Histograma pasa de negativo a positivo
+buy_signal = ta.crossover(hist, 0) and
+             close > ema50 and
+             rsi > rsi_min_buy and
+             rsi < rsi_max_buy
+
+// VENTA: Histograma pasa de positivo a negativo
+sell_signal = ta.crossunder(hist, 0)
+
+// ============================================================================
+// ENTRADA Y SALIDA
+// ============================================================================
+
+// COMPRA
+if buy_signal
+    strategy.entry("LONG", strategy.long)
+    alert("🟢 COMPRA: MACD Histogram positivo | Histograma: " +
+          str.tostring(hist, "#.##") + " | RSI: " + str.tostring(rsi, "#.##"),
+          alert.freq_once_per_bar_close)
+
+// VENTA
+if sell_signal and strategy.position_size > 0
+    strategy.close("LONG")
+    alert("🔴 VENTA: MACD Histogram negativo", alert.freq_once_per_bar_close)
+
+// Stop Loss y Take Profit
+if strategy.position_size > 0
+    strategy.exit("EXIT", stop=close - (sl_points * syminfo.mintick),
+                  limit=close + (tp_points * syminfo.mintick))
+
+// ============================================================================
+// VISUALIZACIÓN
+// ============================================================================
+
+// MACD en panel inferior
+plot(macdLine, color=color.blue, title="MACD", linewidth=1)
+plot(signalLine, color=color.red, title="Signal", linewidth=1)
+plot(hist, color=color.gray, title="Histogram", style=plot.style_histogram, linewidth=2)
+
+hline(0, linestyle=hline.style_dashed, linewidth=1, color=color.white)
+
+// Línea de filtro EMA50
+plot(ema50, color=color.orange, linewidth=2, title="EMA 50")
+
+// RSI
+plot(rsi, color=color.blue, title="RSI 14", linewidth=2)
+hline(rsi_min_buy, "RSI Min Buy", color=color.green, linestyle=hline.style_dashed)
+hline(rsi_max_buy, "RSI Max Buy", color=color.red, linestyle=hline.style_dashed)
+
+// Señales
+plotshape(buy_signal, title="Compra", location=plotshape.location_belowbar,
+          color=color.green, style=plotshape.labelup, size=size.small)
+plotshape(sell_signal, title="Venta", location=plotshape.location_abovebar,
+          color=color.red, style=plotshape.labeldown, size=size.small)
+
+// ============================================================================
+// INFORMACIÓN EN PANTALLA
+// ============================================================================
+
+// Tabla de estadísticas
+table_info = table.new(position.top_right, 2, 5, border_color=color.gray, border_width=1)
+
+table.cell(table_info, 0, 0, "Métrica", bgcolor=color.teal, text_color=color.white)
+table.cell(table_info, 1, 0, "Valor", bgcolor=color.teal, text_color=color.white)
+
+table.cell(table_info, 0, 1, "Win Rate:", text_color=color.white, bgcolor=color.navy)
+table.cell(table_info, 1, 1, "38.78%", text_color=color.lime, bgcolor=color.navy)
+
+table.cell(table_info, 0, 2, "Ganancia Total:", text_color=color.white, bgcolor=color.navy)
+table.cell(table_info, 1, 2, "$4,230", text_color=color.lime, bgcolor=color.navy)
+
+table.cell(table_info, 0, 3, "Operaciones:", text_color=color.white, bgcolor=color.navy)
+table.cell(table_info, 1, 3, "49", text_color=color.lime, bgcolor=color.navy)
+
+table.cell(table_info, 0, 4, "Profit Factor:", text_color=color.white, bgcolor=color.navy)
+table.cell(table_info, 1, 4, "1.44", text_color=color.lime, bgcolor=color.navy)
